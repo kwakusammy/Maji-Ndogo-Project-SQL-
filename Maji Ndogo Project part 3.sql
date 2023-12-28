@@ -40,6 +40,8 @@ WHERE water_quality.subjective_quality_score != auditor_report.true_water_source
 LIMIT 10000;
 
 -- Linking water source to employees
+
+CREATE VIEW incorrect_records AS
 WITH
 	Incorrect_records AS (
 						SELECT
@@ -47,7 +49,8 @@ WITH
 								visits.record_id,
 								employee.employee_name AS employee_name,
 								auditor_report.true_water_source_score AS Audit_score,
-								water_quality.subjective_quality_score AS Empoloyee_score
+								water_quality.subjective_quality_score AS Empoloyee_score,
+								auditor_report.statements AS Statement
 FROM
 auditor_report
 JOIN
@@ -60,7 +63,7 @@ JOIN
 employee
 ON employee.assigned_employee_id = visits.assigned_employee_id
 WHERE water_quality.subjective_quality_score != auditor_report.true_water_source_score AND visits.visit_count
-= 1
+= 1 /* AND auditor_report.statements LIKE '%%cash%%' */ -- Where auditor reported the word 'cash' om the statement of the residents--
 LIMIT 10000
 )
 SELECT
@@ -68,3 +71,47 @@ SELECT
  FROM
  Incorrect_records;
  
+ /* Number of times an employee made mistakes */
+CREATE VIEW error_count AS
+SELECT 
+employee_name,
+COUNT(employee_name) AS number_of_mistakes
+FROM
+incorrect_records
+GROUP BY
+employee_name;
+
+/* Average number of mistakes committed by employees*/
+CREATE VIEW avg_error_count_per_empl AS
+SELECT
+AVG(number_of_mistakes) 
+FROM
+error_count;
+
+/* Finding employees who made more mistakes than average*/
+CREATE VIEW suspect_list AS
+WITH suspect_list AS (
+SELECT
+employee_name,
+number_of_mistakes
+FROM
+error_count
+WHERE
+number_of_mistakes > (SELECT
+                            AVG(number_of_mistakes) 
+							FROM
+							error_count))
+SELECT * FROM suspect_list;
+ 
+ /* Paying close attention to the suspected employees */
+ SELECT
+ employee_name,
+ location,
+Statement
+ FROM
+ incorrect_records
+ WHERE employee_name IN (SELECT 
+								employee_name
+								FROM
+								suspect_list);
+                                
